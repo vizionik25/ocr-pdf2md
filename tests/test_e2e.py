@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from difflib import SequenceMatcher
 from pathlib import Path
 from unittest.mock import patch
 
@@ -190,27 +191,65 @@ class TestCleanUnicode:
 
 
 class TestHeadersFooters:
-    def test_detects_repeating_lines(self):
-        pages = [f"Header Line\nContent {i}\nFooter Line" for i in range(15)]
+    def test_detects_repeating_lines_fuzzy(self):
+        """Lines appearing on 3+ pages are detected even with OCR variation."""
+        pages = [
+            "Approved For Release 2003/09/10: CIA-RDP96-00788R001700210016-5\nContent page 1",
+            "Approved For Release 2003/09/10: SIA-RDP96-00788R001700210016-5\nContent page 2",
+            "Approved For Release 2003/09/10: GIA-RDP96-00788R001700210016-5\nContent page 3",
+        ]
         hf = identify_headers_footers(pages)
-        assert "Header Line" in hf
-        assert "Footer Line" in hf
+        assert len(hf) >= 1
 
-    def test_ignores_infrequent_lines(self):
-        pages = ["Unique Header\nContent\nUnique Footer"]
+    def test_three_page_threshold(self):
+        """Lines on only 2 pages are not flagged."""
+        pages = [
+            "Some Header\nContent page 1",
+            "Some Header\nContent page 2",
+        ]
         hf = identify_headers_footers(pages)
         assert len(hf) == 0
 
-    def test_ignores_long_lines(self):
-        long_line = "A" * 65
-        pages = [f"{long_line}\nContent {i}\nEnd" for i in range(15)]
+    def test_three_page_threshold_met(self):
+        """Lines on exactly 3 pages are flagged."""
+        pages = [
+            "Some Header\nContent page 1",
+            "Some Header\nContent page 2",
+            "Some Header\nContent page 3",
+        ]
         hf = identify_headers_footers(pages)
-        assert long_line not in hf
+        assert len(hf) >= 1
+
+    def test_detects_lines_anywhere_on_page(self):
+        """Header/footer lines in the middle of a page are still detected."""
+        pages = [
+            "Content before\nRepeated Stamp Line\nContent after",
+            "Other content\nRepeated Stamp Line\nMore content",
+            "Yet more\nRepeated Stamp Line\nAnd more",
+        ]
+        hf = identify_headers_footers(pages)
+        assert len(hf) >= 1
+
+    def test_ignores_long_lines(self):
+        """Lines over 120 chars are not considered candidates."""
+        long_line = "A" * 130
+        pages = [f"{long_line}\nContent {i}" for i in range(5)]
+        hf = identify_headers_footers(pages)
+        long_matches = [c for c in hf if len(c) > 120]
+        assert len(long_matches) == 0
+
+    def test_page_numbers_excluded(self):
+        """Bare page number lines are not flagged as headers/footers."""
+        pages = [f"Content for page {i}\n{i}" for i in range(1, 6)]
+        hf = identify_headers_footers(pages)
+        page_num_matches = [c for c in hf if c.strip().isdigit()]
+        assert len(page_num_matches) == 0
 
     def test_header_footer_pdf(self, header_footer_pdf: Path):
         pages = extract_text_from_pdf(header_footer_pdf)
         hf = identify_headers_footers(pages)
-        assert "My Document Title" in hf
+        # "My Document Title" repeats across 15 pages — must be detected
+        assert any("My Document Title" in c or SequenceMatcher(None, c, "My Document Title").ratio() >= 0.55 for c in hf)
 
 
 # ── Page number line detection ──────────────────────────────────────

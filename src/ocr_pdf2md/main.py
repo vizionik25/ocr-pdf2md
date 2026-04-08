@@ -7,7 +7,6 @@ Usage: ocr-pdf2md input.pdf output.md
 import io
 import re
 import sys
-from collections import Counter
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -253,23 +252,49 @@ def remove_stamp_from_line(
     return cleaned if cleaned != line_norm else line
 
 
-def identify_headers_footers(pages: list[str]) -> set[str]:
-    """Identify repeating lines that are headers/footers"""
-    all_lines = []
-    for page in pages:
-        lines = [ln.strip() for ln in page.split('\n') if ln.strip()]
-        if len(lines) >= 2:
-            all_lines.append(lines[0])
-            all_lines.append(lines[-1])
+def identify_headers_footers(
+    pages: list[str], threshold: float = 0.55, min_pages: int = 3
+) -> list[str]:
+    """Identify repeating header/footer lines using fuzzy matching.
 
-    line_counts = Counter(all_lines)
-    headers_footers = set()
+    Scans all lines on every page (not just first/last). Lines under 120 chars
+    are clustered using SequenceMatcher. Clusters spanning *min_pages* or more
+    distinct pages are returned as header/footer candidates.
+    """
+    # Collect (normalized_line, page_index) pairs
+    line_page_pairs: list[tuple[str, int]] = []
+    for page_idx, page in enumerate(pages):
+        for raw_line in page.split("\n"):
+            norm = " ".join(raw_line.split())
+            if not norm or len(norm) > 120:
+                continue
+            if is_page_number_line(norm):
+                continue
+            line_page_pairs.append((norm, page_idx))
 
-    for line, count in line_counts.items():
-        if count >= 10 and len(line) < 60:
-            headers_footers.add(line)
+    # Cluster similar lines
+    # Each cluster: (representative, set_of_page_indices)
+    clusters: list[tuple[str, set[int]]] = []
 
-    return headers_footers
+    for norm_line, page_idx in line_page_pairs:
+        matched = False
+        for i, (rep, page_set) in enumerate(clusters):
+            ratio = SequenceMatcher(None, norm_line, rep).ratio()
+            if ratio >= threshold:
+                page_set.add(page_idx)
+                matched = True
+                break
+        if not matched:
+            clusters.append((norm_line, {page_idx}))
+
+    # Return representatives of clusters spanning enough pages
+    results = [
+        (rep, len(page_set))
+        for rep, page_set in clusters
+        if len(page_set) >= min_pages
+    ]
+    results.sort(key=lambda x: x[1], reverse=True)
+    return [rep for rep, _ in results]
 
 
 def format_toc_line(line: str) -> str:
