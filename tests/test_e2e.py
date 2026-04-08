@@ -574,3 +574,68 @@ class TestFuzzyRemovalInMarkdown:
         pages = ["This is perfectly normal paragraph text with no stamps."]
         md = convert_to_markdown(pages, [self._STAMP])
         assert "perfectly normal" in md
+
+
+class TestOCRHeaderFooterIntegration:
+    """Integration test simulating real OCR output with corrupted stamps."""
+
+    _VARIANTS = [
+        "Approved For Release 2003/09/10: CIA-RDP96-00788R001700210016-5",
+        "Approved For Release 2003/09/10: SIA-RDP96-00788R001700210016-5",
+        "Approved For Release 2003/09/10: GIA-RDP96-00788R001700210016-5 a...",
+        "c F, Approved For Release 2003/09/10: CIA-RDP96-00788R001700210016-5",
+        "Approved For Release 2003/09/10: CLA-RDP96-00788R001700210016-5 oye fy",
+    ]
+
+    # Unique body content per page — deliberately varied so the fuzzy clusterer
+    # does NOT mistake them for repeating stamps.
+    _BODIES = [
+        "The subject reported anomalous psychokinetic activity in sector seven.",
+        "Laboratory findings indicate residual electromagnetic interference throughout.",
+        "Witness testimony conflicts with the official meteorological data recorded.",
+        "Subsequent analysis revealed trace compounds inconsistent with known materials.",
+        "Final assessment: origin and mechanism remain unresolved pending further review.",
+    ]
+
+    def test_all_variants_detected(self):
+        pages = []
+        for variant, body in zip(self._VARIANTS, self._BODIES):
+            pages.append(f"{variant}\n{body}")
+        hf = identify_headers_footers(pages)
+        assert len(hf) >= 1
+
+    def test_all_variants_removed_from_output(self):
+        pages = []
+        for variant, body in zip(self._VARIANTS, self._BODIES):
+            pages.append(f"{variant}\n{body}")
+        hf = identify_headers_footers(pages)
+        md = convert_to_markdown(pages, hf)
+        assert "Approved" not in md
+        assert "CIA-RDP" not in md
+        assert "SIA-RDP" not in md
+        for body in self._BODIES:
+            # Check a distinctive substring from each body line
+            assert body[:30] in md
+
+    def test_page_markers_present_for_all_pages(self):
+        pages = []
+        for variant, body in zip(self._VARIANTS, self._BODIES):
+            pages.append(f"{variant}\n{body}")
+        hf = identify_headers_footers(pages)
+        md = convert_to_markdown(pages, hf)
+        for i in range(1, len(self._VARIANTS) + 1):
+            assert f"--- Page {i}" in md
+
+    def test_duplicate_stamps_on_single_page(self):
+        stamp = "Approved For Release 2003/09/10: CIA-RDP96-00788R001700210016-5"
+        pages = [
+            f"{stamp}\nThe subject described unusual aerial phenomena over the valley.\n{stamp}",
+            f"{stamp}\nLaboratory analysis confirmed the presence of unidentified particulates.",
+            f"Witness testimony was recorded and forwarded to headquarters.\n{stamp} a...",
+        ]
+        hf = identify_headers_footers(pages)
+        md = convert_to_markdown(pages, hf)
+        assert "Approved" not in md
+        assert "aerial phenomena" in md
+        assert "unidentified particulates" in md
+        assert "forwarded to headquarters" in md
