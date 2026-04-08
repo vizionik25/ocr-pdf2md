@@ -18,6 +18,7 @@ from ocr_pdf2md.main import (
     format_toc_line,
     identify_headers_footers,
     is_bullet_or_list,
+    is_fuzzy_match,
     is_page_number_line,
     is_toc_page,
     join_with_dehyphenation,
@@ -247,6 +248,34 @@ class TestPageNumberLine:
 
     def test_empty_string(self):
         assert is_page_number_line("") is False
+
+
+# ── Fuzzy match ──────────────────────────────────────────────────────
+
+
+class TestFuzzyMatch:
+    def test_exact_match(self):
+        candidates = ["Approved For Release 2003/09/10: CIA-RDP96-00788R001700210016-5"]
+        assert is_fuzzy_match("Approved For Release 2003/09/10: CIA-RDP96-00788R001700210016-5", candidates) is True
+
+    def test_ocr_variant_matches(self):
+        candidates = ["Approved For Release 2003/09/10: CIA-RDP96-00788R001700210016-5"]
+        assert is_fuzzy_match("Approved For Release 2003/09/10: SIA-RDP96-00788R001700210016-5", candidates) is True
+
+    def test_heavily_corrupted_matches(self):
+        candidates = ["Approved For Release 2003/09/10: CIA-RDP96-00788R001700210016-5"]
+        assert is_fuzzy_match("Approved For Release 2003/09/10: GIA-RDP96-00788R001700210016-5 a...", candidates) is True
+
+    def test_unrelated_line_no_match(self):
+        candidates = ["Approved For Release 2003/09/10: CIA-RDP96-00788R001700210016-5"]
+        assert is_fuzzy_match("This is regular paragraph content about physics.", candidates) is False
+
+    def test_empty_candidates(self):
+        assert is_fuzzy_match("any line", []) is False
+
+    def test_short_unrelated_no_match(self):
+        candidates = ["Approved For Release 2003/09/10: CIA-RDP96-00788R001700210016-5"]
+        assert is_fuzzy_match("Figure A", candidates) is False
 
 
 # ── TOC detection & formatting ──────────────────────────────────────

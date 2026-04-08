@@ -8,6 +8,7 @@ import io
 import re
 import sys
 from collections import Counter
+from difflib import SequenceMatcher
 from pathlib import Path
 
 import pytesseract
@@ -182,6 +183,18 @@ def is_page_number_line(line: str) -> bool:
     if not line:
         return False
     return _PAGE_NUM_PATTERN.match(line) is not None
+
+
+def is_fuzzy_match(line: str, candidates: list[str], threshold: float = 0.55) -> bool:
+    """Check if a line fuzzy-matches any header/footer candidate."""
+    if not candidates:
+        return False
+    line_norm = " ".join(line.split())
+    for candidate in candidates:
+        ratio = SequenceMatcher(None, line_norm, candidate).ratio()
+        if ratio >= threshold:
+            return True
+    return False
 
 
 def identify_headers_footers(pages: list[str]) -> set[str]:
