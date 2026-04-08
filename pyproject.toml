@@ -1,0 +1,27 @@
+[project]
+name = "pdf2md"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Charles 'Nik' Nichols", email = "nik@vizionikmedia.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "pypdf>=6.9.2",
+    "pytesseract>=0.3.13",
+    "Pillow>=11.0.0",
+]
+
+[project.scripts]
+pdf2md = "pdf2md:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.1,<0.12.0"]
+build-backend = "uv_build"
