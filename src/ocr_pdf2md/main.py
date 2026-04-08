@@ -165,6 +165,25 @@ def extract_text_from_pdf(pdf_path: Path) -> list[str]:
     return pages
 
 
+_PAGE_NUM_PATTERN = re.compile(
+    r'^(?:'
+    r'-{1,2}\s*\d{1,4}\s*-{1,2}'    # - 5 - or -- 12 --
+    r'|page\s+\d{1,4}'               # Page 5, page 42
+    r'|\d{1,4}'                       # bare number 1-9999
+    r'|[ivxlcdm]{1,5}'               # roman numerals lowercase
+    r')$',
+    re.IGNORECASE,
+)
+
+
+def is_page_number_line(line: str) -> bool:
+    """Check if a line is a bare page number (should not be treated as header/footer)."""
+    line = line.strip()
+    if not line:
+        return False
+    return _PAGE_NUM_PATTERN.match(line) is not None
+
+
 def identify_headers_footers(pages: list[str]) -> set[str]:
     """Identify repeating lines that are headers/footers"""
     all_lines = []

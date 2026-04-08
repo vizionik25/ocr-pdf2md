@@ -18,6 +18,7 @@ from ocr_pdf2md.main import (
     format_toc_line,
     identify_headers_footers,
     is_bullet_or_list,
+    is_page_number_line,
     is_toc_page,
     join_with_dehyphenation,
     main,
@@ -208,6 +209,44 @@ class TestHeadersFooters:
         pages = extract_text_from_pdf(header_footer_pdf)
         hf = identify_headers_footers(pages)
         assert "My Document Title" in hf
+
+
+# ── Page number line detection ──────────────────────────────────────
+
+
+class TestPageNumberLine:
+    def test_bare_digit(self):
+        assert is_page_number_line("5") is True
+
+    def test_bare_multi_digit(self):
+        assert is_page_number_line("123") is True
+
+    def test_dashed_page_number(self):
+        assert is_page_number_line("- 5 -") is True
+
+    def test_double_dashed(self):
+        assert is_page_number_line("-- 12 --") is True
+
+    def test_page_prefix(self):
+        assert is_page_number_line("Page 5") is True
+
+    def test_page_prefix_lowercase(self):
+        assert is_page_number_line("page 42") is True
+
+    def test_roman_numeral(self):
+        assert is_page_number_line("iv") is True
+
+    def test_roman_numeral_upper(self):
+        assert is_page_number_line("XII") is True
+
+    def test_regular_text_not_page_number(self):
+        assert is_page_number_line("This is regular text") is False
+
+    def test_long_number_not_page_number(self):
+        assert is_page_number_line("123456") is False
+
+    def test_empty_string(self):
+        assert is_page_number_line("") is False
 
 
 # ── TOC detection & formatting ──────────────────────────────────────
