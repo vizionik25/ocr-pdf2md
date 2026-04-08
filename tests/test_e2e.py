@@ -21,6 +21,7 @@ from ocr_pdf2md.main import (
     is_fuzzy_match,
     is_page_number_line,
     is_toc_page,
+    remove_stamp_from_line,
     join_with_dehyphenation,
     main,
     ocr_page,
@@ -435,3 +436,47 @@ class TestConvertToMarkdown:
     def test_empty_pages_produce_empty_output(self):
         md = convert_to_markdown([], set())
         assert md.strip() == ""
+
+
+# ── remove_stamp_from_line ────────────────────────────────────────────
+
+
+class TestRemoveStampFromLine:
+    _STAMP = "Approved For Release 2003/09/10: CIA-RDP96-00788R001700210016-5"
+
+    def test_pure_stamp_returns_none(self):
+        result = remove_stamp_from_line(self._STAMP, [self._STAMP])
+        assert result is None
+
+    def test_stamp_with_noise_returns_none(self):
+        line = "oye fy " + self._STAMP + " rs"
+        result = remove_stamp_from_line(line, [self._STAMP])
+        assert result is None
+
+    def test_stamp_at_end_preserves_content(self):
+        line = "This is real content. " + self._STAMP
+        result = remove_stamp_from_line(line, [self._STAMP])
+        assert result is not None
+        assert "real content" in result
+        assert "Approved" not in result
+
+    def test_stamp_at_start_preserves_content(self):
+        line = self._STAMP + " This is real content after the stamp."
+        result = remove_stamp_from_line(line, [self._STAMP])
+        assert result is not None
+        assert "real content" in result
+
+    def test_no_match_returns_original(self):
+        line = "This line has no stamp in it at all."
+        result = remove_stamp_from_line(line, [self._STAMP])
+        assert result == line
+
+    def test_residual_garbage_returns_none(self):
+        line = "rs " + self._STAMP
+        result = remove_stamp_from_line(line, [self._STAMP])
+        assert result is None
+
+    def test_double_stamp_returns_none(self):
+        line = self._STAMP + " oye fy " + self._STAMP
+        result = remove_stamp_from_line(line, [self._STAMP])
+        assert result is None

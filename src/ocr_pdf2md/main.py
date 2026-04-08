@@ -197,6 +197,62 @@ def is_fuzzy_match(line: str, candidates: list[str], threshold: float = 0.55) ->
     return False
 
 
+def remove_stamp_from_line(
+    line: str, candidates: list[str], threshold: float = 0.55
+) -> str | None:
+    """Remove header/footer stamp embedded in a line.
+
+    Returns the cleaned line, or None if nothing meaningful remains
+    (pure stamp, or residual text < 5 non-whitespace characters).
+    """
+    if not candidates:
+        return line
+
+    line_norm = " ".join(line.split())
+
+    # Check if entire line is essentially just the stamp — drop it.
+    # Only applies when line is not much longer than the candidate.
+    for candidate in candidates:
+        if len(line_norm) <= len(candidate) * 1.25:
+            if SequenceMatcher(None, line_norm, candidate).ratio() >= threshold:
+                return None
+
+    # Try sliding window to find embedded stamp
+    cleaned = line_norm
+    for candidate in candidates:
+        cand_len = len(candidate)
+        min_win = max(10, int(cand_len * 0.7))
+        max_win = int(cand_len * 1.3)
+
+        best_ratio = 0.0
+        best_start = -1
+        best_end = -1
+
+        for win_size in range(min_win, min(max_win + 1, len(cleaned) + 1)):
+            for start in range(0, len(cleaned) - win_size + 1):
+                window = cleaned[start : start + win_size]
+                ratio = SequenceMatcher(None, window, candidate).ratio()
+                if ratio > best_ratio:
+                    best_ratio = ratio
+                    best_start = start
+                    best_end = start + win_size
+
+        if best_ratio >= threshold and best_start >= 0:
+            cleaned = (cleaned[:best_start] + " " + cleaned[best_end:]).strip()
+            cleaned = " ".join(cleaned.split())
+            # Re-check if remainder is itself essentially the stamp (double-stamp case)
+            if len(cleaned) <= cand_len * 1.25:
+                if SequenceMatcher(None, cleaned, candidate).ratio() >= threshold:
+                    return None
+
+    # If nothing meaningful remains, return None
+    meaningful = sum(1 for c in cleaned if c.isalnum())
+    if meaningful < 5:
+        return None
+
+    return cleaned if cleaned != line_norm else line
+
+
 def identify_headers_footers(pages: list[str]) -> set[str]:
     """Identify repeating lines that are headers/footers"""
     all_lines = []
