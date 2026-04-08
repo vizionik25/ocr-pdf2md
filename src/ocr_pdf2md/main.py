@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 PDF to Markdown Converter with improved TOC formatting
-Usage: pdf2md input.pdf output.md
+Usage: ocr-pdf2md input.pdf output.md
 """
 
 import io
@@ -473,7 +473,7 @@ def convert_to_markdown(pages: list[str], headers_footers: set[str]) -> str:
 
 def main() -> None:
     if len(sys.argv) < 3:
-        print("Usage: pdf2md input.pdf output.md")
+        print("Usage: ocr-pdf2md input.pdf output.md")
         sys.exit(1)
 
     input_pdf = Path(sys.argv[1])

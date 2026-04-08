@@ -1,4 +1,4 @@
-"""End-to-end tests for the pdf2md CLI pipeline."""
+"""End-to-end tests for the ocr-pdf2md CLI pipeline."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from pdf2md.main import (
+from ocr_pdf2md.main import (
     _check_tesseract,
     clean_unicode,
     convert_to_markdown,
@@ -24,7 +24,7 @@ from pdf2md.main import (
     ocr_page,
 )
 
-_ENTRY = "from pdf2md import main; main()"
+_ENTRY = "from ocr_pdf2md import main; main()"
 
 
 # ── CLI entry point ─────────────────────────────────────────────────
@@ -64,7 +64,7 @@ class TestCLI:
 
     def test_main_function_writes_output(self, text_pdf: Path, tmp_path: Path):
         out = tmp_path / "output.md"
-        with patch("sys.argv", ["pdf2md", str(text_pdf), str(out)]):
+        with patch("sys.argv", ["ocr-pdf2md", str(text_pdf), str(out)]):
             main()
         assert out.exists()
         assert len(out.read_text()) > 0

@@ -1,5 +1,5 @@
 [project]
-name = "pdf2md"
+name = "ocr-pdf2md"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pdf2md = "pdf2md:main"
+ocr-pdf2md = "ocr_pdf2md:main"
 
 [dependency-groups]
 dev = [

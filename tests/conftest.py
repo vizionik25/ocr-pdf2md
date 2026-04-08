@@ -1,4 +1,4 @@
-"""Shared fixtures for pdf2md end-to-end tests."""
+"""Shared fixtures for ocr-pdf2md end-to-end tests."""
 
 from __future__ import annotations
 
