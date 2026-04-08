@@ -16,7 +16,8 @@ For scanned or image-based PDFs, [Tesseract](https://github.com/tesseract-ocr/te
 - **macOS:** `brew install tesseract`
 - **Windows:** https://github.com/tesseract-ocr/tesseract
 
-Tesseract is only invoked when a page has little or no extractable text. Fully digital PDFs work without it.
+Tesseract is only invoked when a page has little or no extractable text. Fully digital PDFs work without invoking it, but due
+to the fact that there are so little modern pdf's that are fully digital or image free it is a REQUIREMENT of this package.
 
 ## Usage
 
@@ -28,7 +29,7 @@ ocr-pdf2md input.pdf output.md
 
 - Extracts text from digital PDFs using pypdf
 - Falls back to OCR (Tesseract) for scanned/image pages
-- Detects and removes repeating headers and footers
+- Detects and removes repeating headers and footers ### TODO: fix so that this works with OCR as currently it does not.
 - Identifies and reformats Table of Contents pages
 - Detects headings (ALL CAPS -> H2, Title Case -> H3)
 - Formats bullet and numbered lists
