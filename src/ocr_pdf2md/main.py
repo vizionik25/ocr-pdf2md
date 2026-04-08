@@ -427,7 +427,7 @@ def join_with_dehyphenation(lines: list[str]) -> str:
     return ' '.join(result)
 
 
-def convert_to_markdown(pages: list[str], headers_footers: set[str]) -> str:
+def convert_to_markdown(pages: list[str], headers_footers: list[str]) -> str:
     """Convert pages to markdown"""
     markdown_lines = []
     current_paragraph = []
@@ -453,10 +453,11 @@ def convert_to_markdown(pages: list[str], headers_footers: set[str]) -> str:
 
             for line in page_text.split('\n'):
                 line = line.strip()
-                if line and line not in headers_footers:
+                if line and not (headers_footers and is_fuzzy_match(line, headers_footers)):
                     formatted = format_toc_line(line)
                     markdown_lines.append(formatted)
 
+            markdown_lines.append(f"{'--- Page ' + str(page_num + 1):>80}")
             markdown_lines.append('')
             continue
 
@@ -469,10 +470,14 @@ def convert_to_markdown(pages: list[str], headers_footers: set[str]) -> str:
             line = lines[i].strip()
             i += 1
 
-            # Skip headers/footers
-            if line in headers_footers:
-                prev_line = line
-                continue
+            # Skip headers/footers (fuzzy match)
+            if headers_footers and is_fuzzy_match(line, headers_footers):
+                cleaned = remove_stamp_from_line(line, headers_footers)
+                if cleaned is not None:
+                    line = cleaned
+                else:
+                    prev_line = line
+                    continue
 
             # Empty line
             if not line:
@@ -532,7 +537,7 @@ def convert_to_markdown(pages: list[str], headers_footers: set[str]) -> str:
                     if not next_line:
                         break
 
-                    if next_line in headers_footers:
+                    if headers_footers and is_fuzzy_match(next_line, headers_footers):
                         i += 1
                         continue
 
@@ -569,11 +574,17 @@ def convert_to_markdown(pages: list[str], headers_footers: set[str]) -> str:
                 current_paragraph = [line]
             prev_line = line
 
-    # Flush remaining content
-    if current_list_item:
-        markdown_lines.append(join_with_dehyphenation(current_list_item))
-    if current_paragraph:
-        markdown_lines.append(join_with_dehyphenation(current_paragraph))
+        # Flush and append page break marker
+        if current_list_item:
+            markdown_lines.append(join_with_dehyphenation(current_list_item))
+            current_list_item = []
+        if current_paragraph:
+            markdown_lines.append(join_with_dehyphenation(current_paragraph))
+            current_paragraph = []
+        in_list = False
+        markdown_lines.append("")
+        markdown_lines.append(f"{'--- Page ' + str(page_num + 1):>80}")
+        markdown_lines.append("")
 
     # Join and cleanup
     markdown = '\n'.join(markdown_lines)

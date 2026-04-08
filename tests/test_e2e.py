@@ -519,3 +519,58 @@ class TestRemoveStampFromLine:
         line = self._STAMP + " oye fy " + self._STAMP
         result = remove_stamp_from_line(line, [self._STAMP])
         assert result is None
+
+
+class TestPageMarkers:
+    def test_page_markers_present(self):
+        pages = ["Content on page one.", "Content on page two."]
+        md = convert_to_markdown(pages, [])
+        assert "--- Page 1" in md
+        assert "--- Page 2" in md
+
+    def test_page_markers_right_justified(self):
+        pages = ["Content here."]
+        md = convert_to_markdown(pages, [])
+        for line in md.split("\n"):
+            if "--- Page" in line:
+                assert len(line) == 80
+                assert line.endswith("--- Page 1")
+                break
+        else:
+            assert False, "No page marker found"
+
+    def test_last_page_has_marker(self):
+        pages = ["Page one.", "Page two.", "Page three."]
+        md = convert_to_markdown(pages, [])
+        lines = [l for l in md.split("\n") if "--- Page" in l]
+        assert len(lines) == 3
+        assert "--- Page 3" in lines[-1]
+
+    def test_marker_after_content(self):
+        pages = ["Some actual content here."]
+        md = convert_to_markdown(pages, [])
+        lines = md.split("\n")
+        marker_idx = next(i for i, l in enumerate(lines) if "--- Page 1" in l)
+        content_before = [l for l in lines[:marker_idx] if l.strip()]
+        assert len(content_before) > 0
+
+
+class TestFuzzyRemovalInMarkdown:
+    _STAMP = "Approved For Release 2003/09/10: CIA-RDP96-00788R001700210016-5"
+
+    def test_fuzzy_stamps_removed(self):
+        pages = ["Real content here.\n" + self._STAMP]
+        md = convert_to_markdown(pages, [self._STAMP])
+        assert "Approved" not in md
+        assert "Real content" in md
+
+    def test_mid_line_stamp_extracted(self):
+        pages = ["Important text. " + self._STAMP + " More important text."]
+        md = convert_to_markdown(pages, [self._STAMP])
+        assert "Important text" in md
+        assert "Approved" not in md
+
+    def test_clean_content_preserved(self):
+        pages = ["This is perfectly normal paragraph text with no stamps."]
+        md = convert_to_markdown(pages, [self._STAMP])
+        assert "perfectly normal" in md
