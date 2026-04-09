@@ -350,16 +350,55 @@ def format_toc_line(line: str) -> str:
 
 
 def is_toc_page(text: str) -> bool:
-    """Detect if a page is part of table of contents"""
-    lines = text.split('\n')
-    dot_lines = sum(1 for line in lines if '.....' in line or '......' in line)
-    number_heavy = sum(1 for line in lines if re.search(r'\d+\s*$', line.strip()))
+    """Detect if a page is part of table of contents.
 
-    total_lines = len([ln for ln in lines if ln.strip()])
-    if total_lines > 0:
-        if (dot_lines / total_lines > 0.3) or (number_heavy / total_lines > 0.3):
-            return True
+    Uses context-based detection: looks for a TOC heading and/or a pattern of
+    lines that pair descriptive text with a trailing page number.  Requires a
+    minimum number of non-empty lines to avoid false-triggering on short or
+    garbled pages (e.g. scanned diagrams).
+    """
+    lines = text.split('\n')
+    non_empty = [ln.strip() for ln in lines if ln.strip()]
+
+    # Need enough lines to establish a pattern
+    if len(non_empty) < 5:
+        return False
+
+    # Explicit TOC heading is a strong signal
+    has_toc_heading = any(
+        re.search(r'\b(table\s+of\s+contents|contents|toc)\b', ln, re.IGNORECASE)
+        for ln in non_empty
+    )
+
+    # Count lines with dot leaders (traditional TOC formatting)
+    dot_lines = sum(1 for ln in non_empty if '.....' in ln)
+
+    # Count lines matching "text + trailing page number" pattern
+    # Require at least some alphabetic text before the number
+    toc_entry_pattern = re.compile(r'^[A-Za-z].*\b\d{1,4}\s*$')
+    entry_lines = sum(1 for ln in non_empty if toc_entry_pattern.match(ln))
+
+    total = len(non_empty)
+
+    # Strong signal: TOC heading + some entries
+    if has_toc_heading and (dot_lines + entry_lines) >= 3:
+        return True
+
+    # Pattern-based: majority of lines look like TOC entries
+    if dot_lines / total > 0.4:
+        return True
+    if entry_lines / total > 0.5 and entry_lines >= 5:
+        return True
+
     return False
+
+
+def _alpha_ratio(text: str) -> float:
+    """Return the fraction of non-space characters that are alphabetic."""
+    non_space = [c for c in text if not c.isspace()]
+    if not non_space:
+        return 0.0
+    return sum(1 for c in non_space if c.isalpha()) / len(non_space)
 
 
 def detect_header_level(line: str, prev_line: str | None = None) -> int | None:
@@ -375,8 +414,24 @@ def detect_header_level(line: str, prev_line: str | None = None) -> int | None:
     if len(line) > 80 and line.endswith(('.', '!', '?')):
         return None
 
+    # Reject lines that are mostly non-alphabetic (OCR garble, symbols, etc.)
+    # Check content after stripping any leading markdown prefix
+    content_for_ratio = re.sub(r'^#{1,3}\s*', '', line)
+    if _alpha_ratio(content_for_ratio) < 0.7:
+        return None
+
+    # Reject lines with consecutive special characters (garbled OCR)
+    # Strip leading markdown header prefix before checking
+    check_line = re.sub(r'^#{1,3}\s*', '', line)
+    if re.search(r'[^A-Za-z0-9\s]{3,}', check_line):
+        return None
+
     # Lines starting with ### (from PDF)
     if line.startswith('###'):
+        # Still require alphabetic content after the prefix
+        clean = re.sub(r'^#{1,3}\s*', '', line)
+        if len(clean) < 3 or _alpha_ratio(clean) < 0.7:
+            return None
         return 3
 
     # Check if this looks like a continuation of previous line
@@ -515,6 +570,22 @@ def convert_to_markdown(pages: list[str], headers_footers: list[str]) -> str:
 
             # Empty line
             if not line:
+                # Peek ahead: if the current paragraph doesn't end a sentence
+                # and the next non-empty line continues it (starts lowercase),
+                # treat the blank line as a formatting artifact and keep going.
+                if current_paragraph:
+                    last_text = current_paragraph[-1].rstrip()
+                    if last_text and not last_text.endswith(('.', '!', '?', ':', '"')):
+                        # Find next non-empty line
+                        peek = i
+                        while peek < len(lines) and not lines[peek].strip():
+                            peek += 1
+                        if peek < len(lines):
+                            next_text = lines[peek].strip()
+                            if next_text and next_text[0].islower():
+                                # Continuation across blank line — skip it
+                                continue
+
                 if current_list_item:
                     markdown_lines.append(wrap_line(join_with_dehyphenation(current_list_item), indent="  "))
                     current_list_item = []
