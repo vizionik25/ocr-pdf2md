@@ -18,6 +18,10 @@ from pypdf import PageObject, PdfReader
 # scanned images and sent to OCR.
 _OCR_TEXT_THRESHOLD = 50
 
+# Maximum column width for output lines.  Page breaks are right-justified to
+# this column; paragraphs and list items are word-wrapped at this width.
+_LINE_WIDTH = 171
+
 
 def _check_tesseract() -> None:
     """Exit with a clear message if Tesseract is not installed."""
@@ -427,6 +431,36 @@ def join_with_dehyphenation(lines: list[str]) -> str:
     return ' '.join(result)
 
 
+def wrap_line(text: str, width: int = _LINE_WIDTH, indent: str = "") -> str:
+    """Word-wrap *text* to *width* columns.
+
+    Continuation lines are prefixed with *indent*.  Words are never broken or
+    hyphenated — if a single word exceeds *width* it is placed on its own line.
+    """
+    words = text.split()
+    if not words:
+        return text
+
+    lines: list[str] = []
+    current = words[0]
+
+    for word in words[1:]:
+        # Width available on this line (first line has no indent)
+        prefix = indent if lines else ""
+        if len(prefix + current) + 1 + len(word) <= width:
+            current += " " + word
+        else:
+            lines.append(current)
+            current = word
+
+    lines.append(current)
+
+    # First line as-is; continuation lines get indent
+    return "\n".join(
+        line if i == 0 else indent + line for i, line in enumerate(lines)
+    )
+
+
 def convert_to_markdown(pages: list[str], headers_footers: list[str]) -> str:
     """Convert pages to markdown"""
     markdown_lines = []
@@ -440,10 +474,10 @@ def convert_to_markdown(pages: list[str], headers_footers: list[str]) -> str:
         # Check if TOC page
         if page_num < 20 and is_toc_page(page_text):
             if current_paragraph:
-                markdown_lines.append(join_with_dehyphenation(current_paragraph))
+                markdown_lines.append(wrap_line(join_with_dehyphenation(current_paragraph)))
                 current_paragraph = []
             if current_list_item:
-                markdown_lines.append(join_with_dehyphenation(current_list_item))
+                markdown_lines.append(wrap_line(join_with_dehyphenation(current_list_item), indent="  "))
                 current_list_item = []
                 in_list = False
 
@@ -457,7 +491,7 @@ def convert_to_markdown(pages: list[str], headers_footers: list[str]) -> str:
                     formatted = format_toc_line(line)
                     markdown_lines.append(formatted)
 
-            markdown_lines.append(f"{'--- Page ' + str(page_num + 1):>80}")
+            markdown_lines.append(f"{'--- Page ' + str(page_num + 1):>{_LINE_WIDTH}}")
             markdown_lines.append('')
             continue
 
@@ -482,10 +516,10 @@ def convert_to_markdown(pages: list[str], headers_footers: list[str]) -> str:
             # Empty line
             if not line:
                 if current_list_item:
-                    markdown_lines.append(join_with_dehyphenation(current_list_item))
+                    markdown_lines.append(wrap_line(join_with_dehyphenation(current_list_item), indent="  "))
                     current_list_item = []
                 if current_paragraph:
-                    markdown_lines.append(join_with_dehyphenation(current_paragraph))
+                    markdown_lines.append(wrap_line(join_with_dehyphenation(current_paragraph)))
                     current_paragraph = []
                     markdown_lines.append('')
                 in_list = False
@@ -496,10 +530,10 @@ def convert_to_markdown(pages: list[str], headers_footers: list[str]) -> str:
             header_level = detect_header_level(line, prev_line)
             if header_level:
                 if current_list_item:
-                    markdown_lines.append(join_with_dehyphenation(current_list_item))
+                    markdown_lines.append(wrap_line(join_with_dehyphenation(current_list_item), indent="  "))
                     current_list_item = []
                 if current_paragraph:
-                    markdown_lines.append(join_with_dehyphenation(current_paragraph))
+                    markdown_lines.append(wrap_line(join_with_dehyphenation(current_paragraph)))
                     current_paragraph = []
                     markdown_lines.append('')
 
@@ -515,11 +549,11 @@ def convert_to_markdown(pages: list[str], headers_footers: list[str]) -> str:
 
             if list_type:
                 if current_list_item:
-                    markdown_lines.append(join_with_dehyphenation(current_list_item))
+                    markdown_lines.append(wrap_line(join_with_dehyphenation(current_list_item), indent="  "))
                     current_list_item = []
 
                 if current_paragraph:
-                    markdown_lines.append(join_with_dehyphenation(current_paragraph))
+                    markdown_lines.append(wrap_line(join_with_dehyphenation(current_paragraph)))
                     current_paragraph = []
                     markdown_lines.append('')
 
@@ -559,7 +593,7 @@ def convert_to_markdown(pages: list[str], headers_footers: list[str]) -> str:
             # Regular paragraph text
             if in_list:
                 if current_list_item:
-                    markdown_lines.append(join_with_dehyphenation(current_list_item))
+                    markdown_lines.append(wrap_line(join_with_dehyphenation(current_list_item), indent="  "))
                     current_list_item = []
                 in_list = False
 
@@ -569,21 +603,21 @@ def convert_to_markdown(pages: list[str], headers_footers: list[str]) -> str:
             elif line.endswith('-') or not current_paragraph[-1].endswith(('.', '!', '?', ':', '"')):
                 current_paragraph.append(line)
             else:
-                markdown_lines.append(join_with_dehyphenation(current_paragraph))
+                markdown_lines.append(wrap_line(join_with_dehyphenation(current_paragraph)))
                 markdown_lines.append('')
                 current_paragraph = [line]
             prev_line = line
 
         # Flush and append page break marker
         if current_list_item:
-            markdown_lines.append(join_with_dehyphenation(current_list_item))
+            markdown_lines.append(wrap_line(join_with_dehyphenation(current_list_item), indent="  "))
             current_list_item = []
         if current_paragraph:
-            markdown_lines.append(join_with_dehyphenation(current_paragraph))
+            markdown_lines.append(wrap_line(join_with_dehyphenation(current_paragraph)))
             current_paragraph = []
         in_list = False
         markdown_lines.append("")
-        markdown_lines.append(f"{'--- Page ' + str(page_num + 1):>80}")
+        markdown_lines.append(f"{'--- Page ' + str(page_num + 1):>{_LINE_WIDTH}}")
         markdown_lines.append("")
 
     # Join and cleanup

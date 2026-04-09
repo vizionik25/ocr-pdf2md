@@ -533,7 +533,7 @@ class TestPageMarkers:
         md = convert_to_markdown(pages, [])
         for line in md.split("\n"):
             if "--- Page" in line:
-                assert len(line) == 80
+                assert len(line) == 171
                 assert line.endswith("--- Page 1")
                 break
         else:
